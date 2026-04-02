@@ -116,48 +116,7 @@ export default function MyLeadsPage() {
     return true;
   });
 
-  const todaysLeads = filteredLeads.filter((lead) => isToday(lead.createdAt));
-  const olderLeads = filteredLeads.filter((lead) => !isToday(lead.createdAt));
-
-  const compactLeads = activeFilter === 'all' ? filteredLeads : [];
-
-  const renderLeadCard = (lead: FieldLead) => (
-    <Link
-      key={lead.id}
-      href={`/field/my-leads/${lead.id}`}
-      className="field-card-hover block rounded-[1.7rem] border border-[#eadfcf] bg-white/88 p-4 shadow-[0_22px_50px_-34px_rgba(99,68,26,0.18)] sm:rounded-[1.9rem] sm:p-5"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="truncate text-[1.15rem] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[2rem] sm:tracking-[-0.06em]">
-            {lead.businessName}
-          </h3>
-          <p className="mt-1 text-base text-slate-500 sm:text-lg">{lead.customerName}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-[#eaf1fb] px-3 py-1 text-xs font-semibold text-[#355b8c] sm:px-4 sm:py-1.5 sm:text-sm">
-          {lead.currentStatus === 'new_lead' ? 'New' : lead.currentStatus.replaceAll('_', ' ')}
-        </span>
-      </div>
-
-      <div className="mt-5 space-y-4 text-slate-600 sm:mt-6 sm:space-y-5">
-        <div>
-          <p className="text-base text-slate-500 sm:text-lg">Phone</p>
-          <p className="mt-2 break-all text-[1.05rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[1.95rem] sm:tracking-[-0.05em]">
-            {lead.mobileNumber}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-slate-500 sm:text-lg">
-          <PhoneCall className="h-4 w-4 text-slate-400 sm:h-5 sm:w-5" />
-          <span>{formatDate(lead.createdAt)}</span>
-        </div>
-      </div>
-
-      <div className="mt-4 border-t border-[#f1eadc] pt-3 text-base font-medium tracking-[-0.02em] text-slate-900 sm:mt-5 sm:pt-4 sm:text-xl sm:tracking-[-0.03em]">
-        {formatDate(lead.createdAt)}
-      </div>
-    </Link>
-  );
+  const compactLeads = filteredLeads;
 
   const renderCompactLeadCard = (lead: FieldLead) => (
     <Link
@@ -300,54 +259,26 @@ export default function MyLeadsPage() {
         </div>
       ) : (
         <div className="space-y-5 sm:space-y-6">
-          {activeFilter === 'all' ? (
-            <section className="space-y-4">
-              <h2 className="px-1 text-[1.9rem] font-semibold tracking-[-0.05em] text-slate-950 sm:px-2 sm:text-3xl">
-                All leads
-              </h2>
-              {compactLeads.length === 0 ? (
-                <div className="field-glass rounded-[2rem] p-6 text-center text-sm text-slate-500">
-                  No leads found
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {compactLeads.map(renderCompactLeadCard)}
-                </div>
-              )}
-            </section>
-          ) : (
-            <>
-              <section className="space-y-4">
-                <h2 className="px-1 text-[1.9rem] font-semibold tracking-[-0.05em] text-slate-950 sm:px-2 sm:text-3xl">
-                  Today
-                </h2>
-                {todaysLeads.length === 0 ? (
-                  <div className="field-glass rounded-[2rem] p-6 text-center text-sm text-slate-500">
-                    No leads today
-                  </div>
-                ) : (
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {todaysLeads.map(renderLeadCard)}
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-4">
-                <h2 className="px-1 text-[1.9rem] font-semibold tracking-[-0.05em] text-slate-950 sm:px-2 sm:text-3xl">
-                  Older
-                </h2>
-                {olderLeads.length === 0 ? (
-                  <div className="field-glass rounded-[2rem] p-6 text-center text-sm text-slate-500">
-                    No older leads
-                  </div>
-                ) : (
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {olderLeads.map(renderLeadCard)}
-                  </div>
-                )}
-              </section>
-            </>
-          )}
+          <section className="space-y-4">
+            <h2 className="px-1 text-[1.9rem] font-semibold tracking-[-0.05em] text-slate-950 sm:px-2 sm:text-3xl">
+              {activeFilter === 'all'
+                ? 'All leads'
+                : activeFilter === 'today'
+                  ? 'Today'
+                  : activeFilter === 'week'
+                    ? 'This week'
+                    : 'Pending'}
+            </h2>
+            {compactLeads.length === 0 ? (
+              <div className="field-glass rounded-[2rem] p-6 text-center text-sm text-slate-500">
+                No leads found
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {compactLeads.map(renderCompactLeadCard)}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>

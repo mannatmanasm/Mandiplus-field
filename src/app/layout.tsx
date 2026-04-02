@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Manrope, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/features/auth/AuthContext';
+import PwaEnhancer from '@/features/pwa/PwaEnhancer';
 
 const manrope = Manrope({
   variable: '--font-manrope',
@@ -18,6 +19,11 @@ export const metadata: Metadata = {
   title: 'MandiPlus Field PWA',
   description: 'Standalone field operations progressive web app for the MandiPlus team.',
   manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'MandiPlus Field',
+    statusBarStyle: 'default',
+  },
 };
 
 export const viewport = {
@@ -34,7 +40,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${manrope.variable} ${plexMono.variable}`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <PwaEnhancer />
+        </AuthProvider>
       </body>
     </html>
   );
