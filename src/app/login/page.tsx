@@ -225,9 +225,6 @@ export default function LoginPage() {
                 </span>
               </div>
             </div>
-            <div className="absolute bottom-4 left-4 right-4 rounded-full border border-white/70 bg-white/40 px-4 py-2 text-center text-sm font-medium text-slate-800 backdrop-blur">
-              Fast login for field agents
-            </div>
           </div>
 
           <div className="px-5 py-6 sm:px-6">
