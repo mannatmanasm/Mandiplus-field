@@ -53,7 +53,26 @@ const reasonOptions = [
 
 const TIMELINE_STEPS = ['Scheduled', 'Completed', 'Follow-up', 'Converted / Dropped'] as const;
 
-const INITIAL_FORM = {
+type InterestLevelOption = (typeof interestOptions)[number]['value'];
+type NextActionOption = (typeof nextActionOptions)[number];
+type ReasonOption = '' | (typeof reasonOptions)[number];
+
+type MeetingFormState = {
+  customerResponse: string;
+  interestLevel: InterestLevelOption;
+  notes: string;
+  nextAction: NextActionOption;
+  nextActionCustom: string;
+  followUpDate: string;
+  outcomeStatus: LeadStatus;
+  reasonCategory: ReasonOption;
+  reasonDetails: string;
+  rescheduledDate: string;
+  rescheduledTime: string;
+  rescheduleReason: string;
+};
+
+const INITIAL_FORM: MeetingFormState = {
   customerResponse: '',
   interestLevel: 'moderate_interest',
   notes: '',
