@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CalendarDays,
   CirclePlus,
@@ -13,6 +13,10 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthContext';
+import {
+  getQueuedRequestCount,
+  subscribeToOfflineQueue,
+} from '@/features/pwa/offlineQueue';
 
 const navigation = [
   { name: 'Overview', href: '/field', icon: House },
@@ -34,12 +38,36 @@ export default function ProtectedShell({
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace('/login');
     }
   }, [loading, router, user]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const refreshQueueState = async () => {
+      try {
+        const count = await getQueuedRequestCount();
+        if (mounted) {
+          setPendingSyncCount(count);
+        }
+      } catch {
+        // no-op
+      }
+    };
+
+    refreshQueueState();
+    const unsubscribe = subscribeToOfflineQueue(refreshQueueState);
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   if (loading || !user) {
     return (
@@ -68,6 +96,11 @@ export default function ProtectedShell({
               <LayoutGrid className="h-3.5 w-3.5" />
               Active
             </div>
+            {pendingSyncCount > 0 ? (
+              <div className="mt-3 inline-flex items-center rounded-full border border-[#fcd9a5] bg-[#fff5e4] px-3 py-1.5 text-xs font-semibold text-[#b45309]">
+                Pending Sync
+              </div>
+            ) : null}
           </div>
 
           <nav className="mt-8 space-y-2">
@@ -112,6 +145,13 @@ export default function ProtectedShell({
       </div>
 
       <nav className="field-glass fixed inset-x-3 bottom-3 z-30 rounded-[1.6rem] px-2 py-2 lg:hidden">
+        {pendingSyncCount > 0 ? (
+          <div className="mb-2 flex justify-center">
+            <span className="rounded-full border border-[#fcd9a5] bg-[#fff5e4] px-3 py-1 text-[11px] font-semibold text-[#b45309]">
+              Pending Sync
+            </span>
+          </div>
+        ) : null}
         <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
           {navigation.map((item) => {
             const active = pathname === item.href;

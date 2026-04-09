@@ -5,6 +5,10 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { Camera, PlusCircle } from 'lucide-react';
 import { createFieldLead } from '@/features/field/api';
+import {
+  isOfflineCapableError,
+  queueLeadCreation,
+} from '@/features/pwa/offlineQueue';
 
 export default function AddLeadPage() {
   const router = useRouter();
@@ -45,6 +49,21 @@ export default function AddLeadPage() {
       setBoardPhoto(null);
       window.setTimeout(() => router.push('/field/my-leads'), 900);
     } catch (error: unknown) {
+      if (isOfflineCapableError(error)) {
+        await queueLeadCreation(form, boardPhoto);
+        setSuccess('No internet. Lead saved offline and will sync automatically.');
+        setForm({
+          businessName: '',
+          customerName: '',
+          businessAddress: '',
+          mobileNumber: '',
+          businessType: '',
+        });
+        setBoardPhoto(null);
+        window.setTimeout(() => router.push('/field/my-leads'), 900);
+        return;
+      }
+
       setError(
         axios.isAxiosError(error)
           ? error.response?.data?.message || 'Failed to submit lead'

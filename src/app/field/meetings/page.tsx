@@ -5,19 +5,68 @@ import axios from 'axios';
 import { CalendarClock, CheckCircle2 } from 'lucide-react';
 import {
   FieldAppointment,
+  LeadStatus,
+  type MeetingFeedbackPayload,
   getMyFieldMeetings,
   submitMeetingFeedback,
 } from '@/features/field/api';
+import {
+  isOfflineCapableError,
+  queueMeetingFeedback,
+} from '@/features/pwa/offlineQueue';
 
 const outcomeOptions = [
-  'meeting_completed',
-  'converted',
-  'follow_up_required',
-  'not_interested',
-  'closed',
+  { value: 'meeting_completed', label: 'Meeting Completed' },
+  { value: 'converted', label: 'Converted' },
+  { value: 'follow_up_required', label: 'Follow-up Required' },
+  { value: 'rescheduled', label: 'Rescheduled' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'closed', label: 'Dropped' },
+] as const satisfies ReadonlyArray<{ value: LeadStatus; label: string }>;
+
+const interestOptions = [
+  { value: 'high_interest', label: 'High Interest' },
+  { value: 'moderate_interest', label: 'Moderate Interest' },
+  { value: 'low_interest', label: 'Low Interest' },
+  { value: 'exploring', label: 'Exploring' },
+  { value: 'no_fit', label: 'No Fit' },
 ] as const;
 
-const interestOptions = ['hot', 'warm', 'cold'] as const;
+const nextActionOptions = [
+  'call_again',
+  'send_quotation',
+  'schedule_demo',
+  'visit_again',
+  'share_details_on_whatsapp',
+  'custom',
+] as const;
+
+const reasonOptions = [
+  'price_too_high',
+  'already_using_competitor',
+  'no_requirement',
+  'decision_pending',
+  'trust_issue',
+  'logistics_issue',
+  'custom',
+] as const;
+
+const TIMELINE_STEPS = ['Scheduled', 'Completed', 'Follow-up', 'Converted / Dropped'] as const;
+
+const INITIAL_FORM = {
+  customerResponse: '',
+  interestLevel: 'moderate_interest',
+  notes: '',
+  nextAction: 'call_again',
+  nextActionCustom: '',
+  followUpDate: '',
+  outcomeStatus: 'meeting_completed' as LeadStatus,
+  reasonCategory: '',
+  reasonDetails: '',
+  rescheduledDate: '',
+  rescheduledTime: '',
+  rescheduleReason: '',
+};
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('en-IN', {
@@ -29,25 +78,65 @@ function formatDateTime(value: string) {
   });
 }
 
+function formatStatusLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatActionLabel(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getTimelineStepState(meeting: FieldAppointment, step: (typeof TIMELINE_STEPS)[number]) {
+  const leadStatus = meeting.lead.currentStatus;
+  const meetingStatus = meeting.status;
+
+  if (step === 'Scheduled') {
+    return 'done';
+  }
+
+  if (step === 'Completed') {
+    return meetingStatus === 'completed' || meetingStatus === 'rescheduled' || leadStatus !== 'meeting_assigned'
+      ? 'done'
+      : 'current';
+  }
+
+  if (step === 'Follow-up') {
+    if (leadStatus === 'follow_up_required' || meetingStatus === 'rescheduled' || leadStatus === 'rescheduled') {
+      return 'current';
+    }
+
+    if (leadStatus === 'converted' || leadStatus === 'not_interested' || leadStatus === 'closed') {
+      return 'done';
+    }
+
+    return 'upcoming';
+  }
+
+  if (leadStatus === 'converted' || leadStatus === 'not_interested' || leadStatus === 'closed') {
+    return 'current';
+  }
+
+  return 'upcoming';
+}
+
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<FieldAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    customerResponse: '',
-    interestLevel: 'warm',
-    notes: '',
-    nextAction: '',
-    followUpDate: '',
-    outcomeStatus: 'meeting_completed',
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
 
   const loadMeetings = async () => {
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
       setMeetings(await getMyFieldMeetings());
     } catch (error: unknown) {
       setError(
@@ -64,34 +153,96 @@ export default function MeetingsPage() {
     loadMeetings();
   }, []);
 
+  const selectedOutcome = form.outcomeStatus;
+  const isConverted = selectedOutcome === 'converted';
+  const needsFollowUpDate = selectedOutcome === 'follow_up_required';
+  const isRescheduled = selectedOutcome === 'rescheduled';
+  const needsReasonTracking =
+    selectedOutcome === 'not_interested' ||
+    selectedOutcome === 'closed';
+  const usesCustomNextAction = form.nextAction === 'custom';
+  const usesCustomReason = form.reasonCategory === 'custom';
+
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
     appointmentId: string,
   ) => {
     event.preventDefault();
+
+    if (needsFollowUpDate && !form.followUpDate) {
+      setError('Follow-up date and time are required when follow-up is needed.');
+      return;
+    }
+
+    if (isRescheduled && (!form.rescheduledDate || !form.rescheduledTime)) {
+      setError('Rescheduled date and time are required when outcome is rescheduled.');
+      return;
+    }
+
+    if (needsReasonTracking && !form.reasonCategory) {
+      setError('Please select a reason for the selected outcome.');
+      return;
+    }
+
     try {
+      setError('');
+      setSuccess('');
       setSubmittingId(appointmentId);
-      await submitMeetingFeedback(appointmentId, {
+      const payload: MeetingFeedbackPayload = {
         ...form,
-        interestLevel: form.interestLevel as 'hot' | 'warm' | 'cold',
-        outcomeStatus: form.outcomeStatus as
-          | 'meeting_completed'
-          | 'converted'
-          | 'follow_up_required'
-          | 'not_interested'
-          | 'closed',
-      });
+        nextAction:
+          form.nextAction === 'custom'
+            ? form.nextActionCustom.trim()
+            : formatActionLabel(form.nextAction),
+        followUpDate: isConverted || isRescheduled ? '' : form.followUpDate,
+        outcomeStatus: form.outcomeStatus,
+        reasonCategory: needsReasonTracking
+          ? formatActionLabel(form.reasonCategory)
+          : '',
+        reasonDetails:
+          needsReasonTracking && form.reasonCategory === 'custom'
+            ? form.reasonDetails.trim()
+            : '',
+        rescheduledDate: isRescheduled ? form.rescheduledDate : '',
+        rescheduledTime: isRescheduled ? form.rescheduledTime : '',
+        rescheduleReason: isRescheduled ? form.rescheduleReason.trim() : '',
+      };
+
+      await submitMeetingFeedback(appointmentId, payload);
       setActiveId(null);
-      setForm({
-        customerResponse: '',
-        interestLevel: 'warm',
-        notes: '',
-        nextAction: '',
-        followUpDate: '',
-        outcomeStatus: 'meeting_completed',
-      });
+      setForm(INITIAL_FORM);
+      setSuccess('Feedback saved successfully.');
       await loadMeetings();
     } catch (error: unknown) {
+      const payload: MeetingFeedbackPayload = {
+        ...form,
+        nextAction:
+          form.nextAction === 'custom'
+            ? form.nextActionCustom.trim()
+            : formatActionLabel(form.nextAction),
+        followUpDate: isConverted || isRescheduled ? '' : form.followUpDate,
+        outcomeStatus: form.outcomeStatus,
+        reasonCategory: needsReasonTracking
+          ? formatActionLabel(form.reasonCategory)
+          : '',
+        reasonDetails:
+          needsReasonTracking && form.reasonCategory === 'custom'
+            ? form.reasonDetails.trim()
+            : '',
+        rescheduledDate: isRescheduled ? form.rescheduledDate : '',
+        rescheduledTime: isRescheduled ? form.rescheduledTime : '',
+        rescheduleReason: isRescheduled ? form.rescheduleReason.trim() : '',
+      };
+
+      if (isOfflineCapableError(error)) {
+        await queueMeetingFeedback(appointmentId, payload);
+        setActiveId(null);
+        setForm(INITIAL_FORM);
+        setError('');
+        setSuccess('No internet. Feedback saved offline and will sync automatically.');
+        return;
+      }
+
       setError(
         axios.isAxiosError(error)
           ? error.response?.data?.message || 'Failed to submit feedback'
@@ -136,6 +287,11 @@ export default function MeetingsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          {success ? (
+            <div className="rounded-[1.6rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {success}
+            </div>
+          ) : null}
           {meetings.map((meeting) => (
             <article
               key={meeting.id}
@@ -157,7 +313,7 @@ export default function MeetingsPage() {
                   <p className="font-semibold">
                     {formatDateTime(meeting.scheduledAt)}
                   </p>
-                  <p className="mt-1 capitalize">{meeting.status}</p>
+                  <p className="mt-1">{formatStatusLabel(meeting.status)}</p>
                 </div>
               </div>
 
@@ -167,11 +323,49 @@ export default function MeetingsPage() {
                 </div>
               ) : null}
 
+              <div className="mt-5 rounded-[1.6rem] border border-[#eadfcf] bg-white/70 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Status flow
+                  </h3>
+                  <span className="text-xs font-medium text-slate-500">
+                    Scheduled to outcome
+                  </span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {TIMELINE_STEPS.map((step) => {
+                    const state = getTimelineStepState(meeting, step);
+                    const tone =
+                      state === 'done'
+                        ? 'border-[#bbf7d0] bg-[#eefcf3] text-[#166534]'
+                        : state === 'current'
+                          ? 'border-[#fdba74] bg-[#fff4e8] text-[#9a3412]'
+                          : 'border-[#e5e7eb] bg-[#f8fafc] text-slate-500';
+
+                    return (
+                      <div
+                        key={step}
+                        className={`rounded-2xl border px-3 py-3 text-sm font-medium ${tone}`}
+                      >
+                        {step}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="mt-5">
                 <button
                   type="button"
                   onClick={() =>
-                    setActiveId((prev) => (prev === meeting.id ? null : meeting.id))
+                    setActiveId((prev) => {
+                      const nextId = prev === meeting.id ? null : meeting.id;
+                      if (nextId) {
+                        setForm(INITIAL_FORM);
+                        setError('');
+                      }
+                      return nextId;
+                    })
                   }
                   className="rounded-2xl bg-[#5b21b6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4c1d95]"
                 >
@@ -216,8 +410,8 @@ export default function MeetingsPage() {
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
                     >
                       {interestOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
+                        <option key={option.value} value={option.value}>
+                          {option.label}
                         </option>
                       ))}
                     </select>
@@ -238,35 +432,180 @@ export default function MeetingsPage() {
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
                     >
                       {outcomeOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option.replaceAll('_', ' ')}
+                        <option key={option.value} value={option.value}>
+                          {option.label}
                         </option>
                       ))}
                     </select>
                   </label>
 
                   <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Next action</span>
-                    <input
+                    <span className="text-sm font-medium text-slate-700">
+                      Next step
+                    </span>
+                    <select
                       value={form.nextAction}
                       onChange={(event) =>
                         setForm((prev) => ({ ...prev, nextAction: event.target.value }))
                       }
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
-                    />
+                    >
+                      {nextActionOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option === 'custom' ? 'Custom' : formatActionLabel(option)}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
-                  <label className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700">Follow-up date</span>
-                    <input
-                      type="datetime-local"
-                      value={form.followUpDate}
-                      onChange={(event) =>
-                        setForm((prev) => ({ ...prev, followUpDate: event.target.value }))
-                      }
-                      className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
-                    />
-                  </label>
+                  {usesCustomNextAction ? (
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">
+                        Custom next step
+                      </span>
+                      <input
+                        value={form.nextActionCustom}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            nextActionCustom: event.target.value,
+                          }))
+                        }
+                        placeholder="Enter next step"
+                        className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                      />
+                    </label>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#eadfcf] bg-[#fffaf3] px-4 py-3 text-sm text-slate-600">
+                      Guided next step: {formatActionLabel(form.nextAction)}
+                    </div>
+                  )}
+
+                  {!isConverted && !isRescheduled ? (
+                    <label className="space-y-2">
+                      <span className="text-sm font-medium text-slate-700">
+                        Follow-up date & time
+                      </span>
+                      <input
+                        type="datetime-local"
+                        required={needsFollowUpDate}
+                        value={form.followUpDate}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, followUpDate: event.target.value }))
+                        }
+                        className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                      />
+                    </label>
+                  ) : null}
+
+                  {isRescheduled ? (
+                    <>
+                      <label className="space-y-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Rescheduled date
+                        </span>
+                        <input
+                          type="date"
+                          required
+                          value={form.rescheduledDate}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              rescheduledDate: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                        />
+                      </label>
+
+                      <label className="space-y-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Rescheduled time
+                        </span>
+                        <input
+                          type="time"
+                          required
+                          value={form.rescheduledTime}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              rescheduledTime: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                        />
+                      </label>
+
+                      <label className="space-y-2 md:col-span-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Reason for reschedule
+                        </span>
+                        <textarea
+                          rows={2}
+                          value={form.rescheduleReason}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              rescheduleReason: event.target.value,
+                            }))
+                          }
+                          placeholder="Optional reason for rescheduling"
+                          className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                        />
+                      </label>
+                    </>
+                  ) : null}
+
+                  {needsReasonTracking ? (
+                    <>
+                      <label className="space-y-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Reason tracking
+                        </span>
+                        <select
+                          required
+                          value={form.reasonCategory}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              reasonCategory: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                        >
+                          <option value="">Select a reason</option>
+                          {reasonOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option === 'custom' ? 'Custom' : formatActionLabel(option)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      {usesCustomReason ? (
+                        <label className="space-y-2">
+                          <span className="text-sm font-medium text-slate-700">
+                            Custom reason
+                          </span>
+                          <input
+                            value={form.reasonDetails}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                reasonDetails: event.target.value,
+                              }))
+                            }
+                            placeholder="Enter custom reason"
+                            className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                          />
+                        </label>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-[#eadfcf] bg-[#fffaf3] px-4 py-3 text-sm text-slate-600">
+                          Reason will be saved as: {form.reasonCategory ? formatActionLabel(form.reasonCategory) : 'Select a reason'}
+                        </div>
+                      )}
+                    </>
+                  ) : null}
 
                   <label className="space-y-2 md:col-span-2">
                     <span className="text-sm font-medium text-slate-700">Notes</span>

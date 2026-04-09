@@ -18,7 +18,8 @@ export type LeadStatus =
   | 'converted'
   | 'not_interested'
   | 'follow_up_required'
-  | 'closed';
+  | 'closed'
+  | 'rescheduled';
 
 export interface FieldProfile {
   user: {
@@ -64,11 +65,22 @@ export interface FieldMeetingFeedback {
   id: string;
   appointmentId: string;
   customerResponse?: string | null;
-  interestLevel?: 'hot' | 'warm' | 'cold' | null;
+  interestLevel?:
+    | 'high_interest'
+    | 'moderate_interest'
+    | 'low_interest'
+    | 'exploring'
+    | 'no_fit'
+    | null;
   notes?: string | null;
   nextAction?: string | null;
   followUpDate?: string | null;
   outcomeStatus: LeadStatus;
+  reasonCategory?: string | null;
+  reasonDetails?: string | null;
+  rescheduledDate?: string | null;
+  rescheduledTime?: string | null;
+  rescheduleReason?: string | null;
   submittedAt: string;
   submittedByUser?: {
     id: string;
@@ -97,6 +109,25 @@ export interface FieldDashboardResponse {
   };
   recentLeads: FieldLead[];
 }
+
+export type MeetingFeedbackPayload = {
+  customerResponse?: string;
+  interestLevel?:
+    | 'high_interest'
+    | 'moderate_interest'
+    | 'low_interest'
+    | 'exploring'
+    | 'no_fit';
+  notes?: string;
+  nextAction?: string;
+  followUpDate?: string;
+  outcomeStatus: LeadStatus;
+  reasonCategory?: string;
+  reasonDetails?: string;
+  rescheduledDate?: string;
+  rescheduledTime?: string;
+  rescheduleReason?: string;
+};
 
 function authHeaders() {
   const token = getStoredAuthToken();
@@ -157,14 +188,7 @@ export async function getMyFieldMeetings(): Promise<FieldAppointment[]> {
 
 export async function submitMeetingFeedback(
   appointmentId: string,
-  payload: {
-    customerResponse?: string;
-    interestLevel?: 'hot' | 'warm' | 'cold';
-    notes?: string;
-    nextAction?: string;
-    followUpDate?: string;
-    outcomeStatus: LeadStatus;
-  },
+  payload: MeetingFeedbackPayload,
 ) {
   const response = await axios.post(
     `${API_BASE_URL}/field-operations/appointments/${appointmentId}/feedback`,

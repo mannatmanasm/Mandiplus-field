@@ -30,7 +30,14 @@ function formatDateTime(value?: string | null) {
 }
 
 function formatStatus(value: string) {
-  return value.replaceAll('_', ' ');
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatInterest(value?: string | null) {
+  if (!value) return 'Not marked';
+  return formatStatus(value);
 }
 
 export default function LeadDetailPage() {
@@ -237,11 +244,11 @@ export default function LeadDetailPage() {
                   <div>
                     <p className="text-sm text-slate-500">Interest</p>
                     <p className="mt-1 text-sm text-slate-900">
-                      {entry.interestLevel || 'Not marked'}
+                      {formatInterest(entry.interestLevel)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-500">Next action</p>
+                    <p className="text-sm text-slate-500">Next step</p>
                     <p className="mt-1 text-sm text-slate-900">
                       {entry.nextAction || 'No next action'}
                     </p>
@@ -270,6 +277,24 @@ export default function LeadDetailPage() {
                       {formatDateTime(entry.submittedAt)}
                     </p>
                   </div>
+                  {'reasonCategory' in entry ? (
+                    <div>
+                      <p className="text-sm text-slate-500">Reason tracking</p>
+                      <p className="mt-1 text-sm text-slate-900">
+                        {entry.reasonCategory || 'Not captured'}
+                      </p>
+                    </div>
+                  ) : null}
+                  {'rescheduledDate' in entry || 'rescheduledTime' in entry ? (
+                    <div>
+                      <p className="text-sm text-slate-500">Rescheduled slot</p>
+                      <p className="mt-1 text-sm text-slate-900">
+                        {entry.rescheduledDate || entry.rescheduledTime
+                          ? [entry.rescheduledDate, entry.rescheduledTime].filter(Boolean).join(' ')
+                          : 'Not rescheduled'}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))

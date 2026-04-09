@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mandiplus-field-v1';
+const CACHE_NAME = 'mandiplus-field-v2';
 const APP_SHELL = [
   '/',
   '/login',
