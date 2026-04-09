@@ -149,7 +149,7 @@ export default function MeetingsPage() {
   const [success, setSuccess] = useState('');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [form, setForm] = useState<MeetingFormState>(INITIAL_FORM);
 
   const loadMeetings = async () => {
     try {
@@ -423,7 +423,7 @@ export default function MeetingsPage() {
                       onChange={(event) =>
                         setForm((prev) => ({
                           ...prev,
-                          interestLevel: event.target.value,
+                          interestLevel: event.target.value as InterestLevelOption,
                         }))
                       }
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
@@ -445,7 +445,7 @@ export default function MeetingsPage() {
                       onChange={(event) =>
                         setForm((prev) => ({
                           ...prev,
-                          outcomeStatus: event.target.value,
+                          outcomeStatus: event.target.value as LeadStatus,
                         }))
                       }
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
@@ -465,7 +465,10 @@ export default function MeetingsPage() {
                     <select
                       value={form.nextAction}
                       onChange={(event) =>
-                        setForm((prev) => ({ ...prev, nextAction: event.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          nextAction: event.target.value as NextActionOption,
+                        }))
                       }
                       className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
                     >
@@ -587,7 +590,7 @@ export default function MeetingsPage() {
                           onChange={(event) =>
                             setForm((prev) => ({
                               ...prev,
-                              reasonCategory: event.target.value,
+                              reasonCategory: event.target.value as ReasonOption,
                             }))
                           }
                           className="w-full rounded-2xl border border-[#e7dcc7] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
