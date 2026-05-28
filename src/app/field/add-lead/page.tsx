@@ -51,7 +51,7 @@ export default function AddLeadPage() {
     } catch (error: unknown) {
       if (isOfflineCapableError(error)) {
         await queueLeadCreation(form, boardPhoto);
-        setSuccess('No internet. Lead saved offline and will sync automatically.');
+        setSuccess('Lead saved successfully.');
         setForm({
           businessName: '',
           customerName: '',

@@ -15,7 +15,9 @@ export type LeadStatus =
   | 'appointment_scheduled'
   | 'meeting_assigned'
   | 'meeting_completed'
+  | 'commission_buyer'
   | 'converted'
+  | 'not_receiving_call'
   | 'not_interested'
   | 'follow_up_required'
   | 'closed'
@@ -45,6 +47,31 @@ export interface FieldLead {
   boardPhotoUrl?: string | null;
   currentStatus: LeadStatus;
   latestFeedbackSummary?: string | null;
+  createdAt: string;
+  leadSource?: 'FIELD_LEAD' | 'MANDI_DATA';
+  mandiData?: {
+    commodity: string;
+    mandiName: string;
+    biggestBuyerName: string;
+    transporterName: string;
+    trucksPerDay: number;
+    regionSourceArea: string;
+    todayPrice: number | string;
+  };
+}
+
+export type PriorityLeadPayload = {
+  commodity: string;
+  mandiName: string;
+  biggestBuyerName: string;
+  transporterName: string;
+  trucksPerDay: number;
+  regionSourceArea: string;
+  todayPrice: number;
+};
+
+export interface FieldPriorityLead extends PriorityLeadPayload {
+  id: string;
   createdAt: string;
 }
 
@@ -163,6 +190,22 @@ export async function createFieldLead(payload: FormData): Promise<FieldLead> {
       headers: {
         ...authHeaders(),
         'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function createPriorityLead(
+  payload: PriorityLeadPayload,
+): Promise<FieldPriorityLead> {
+  const response = await axios.post(
+    `${API_BASE_URL}/field-operations/priority-leads`,
+    payload,
+    {
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
       },
     },
   );

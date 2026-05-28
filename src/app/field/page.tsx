@@ -141,7 +141,7 @@ export default function FieldHomePage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 lg:space-y-6">
-      <section className="px-1 pt-1">
+      <section className="hidden px-1 pt-1 lg:block">
         <div className="text-[1rem] leading-none">
           <span className="brand-wordmark">
             <span className="brand-mandi">Mandi</span>

@@ -258,7 +258,7 @@ export default function MeetingsPage() {
         setActiveId(null);
         setForm(INITIAL_FORM);
         setError('');
-        setSuccess('No internet. Feedback saved offline and will sync automatically.');
+        setSuccess('Feedback saved successfully.');
         return;
       }
 

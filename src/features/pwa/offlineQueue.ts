@@ -3,8 +3,10 @@
 import axios from 'axios';
 import {
   createFieldLead,
+  createPriorityLead,
   submitMeetingFeedback,
   type MeetingFeedbackPayload,
+  type PriorityLeadPayload,
 } from '@/features/field/api';
 
 const DB_NAME = 'mandiplus-field-offline-db';
@@ -43,7 +45,17 @@ type QueuedFeedbackRequest = {
   };
 };
 
-type QueuedRequest = QueuedLeadRequest | QueuedFeedbackRequest;
+type QueuedPriorityLeadRequest = {
+  id: string;
+  type: 'priority_lead';
+  createdAt: string;
+  payload: PriorityLeadPayload;
+};
+
+type QueuedRequest =
+  | QueuedLeadRequest
+  | QueuedFeedbackRequest
+  | QueuedPriorityLeadRequest;
 
 function emitQueueChange() {
   if (typeof window === 'undefined') return;
@@ -181,6 +193,22 @@ export async function queueMeetingFeedback(
   emitOfflineSaved();
 }
 
+export async function queuePriorityLead(payload: PriorityLeadPayload) {
+  const request: QueuedPriorityLeadRequest = {
+    id: makeId('priority'),
+    type: 'priority_lead',
+    createdAt: new Date().toISOString(),
+    payload,
+  };
+
+  await withStore('readwrite', async (store) => {
+    await requestToPromise(store.put(request));
+  });
+
+  emitQueueChange();
+  emitOfflineSaved();
+}
+
 export async function getQueuedRequestCount() {
   return withStore('readonly', async (store) => requestToPromise<number>(store.count()));
 }
@@ -237,11 +265,13 @@ export async function syncOfflineQueue() {
     try {
       if (request.type === 'create_lead') {
         await createFieldLead(rebuildLeadFormData(request.payload));
-      } else {
+      } else if (request.type === 'meeting_feedback') {
         await submitMeetingFeedback(
           request.payload.appointmentId,
           request.payload.feedback,
         );
+      } else {
+        await createPriorityLead(request.payload);
       }
 
       await removeQueuedRequest(request.id);

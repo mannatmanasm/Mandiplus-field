@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Search, PhoneCall, SlidersHorizontal, CalendarRange } from 'lucide-react';
+import { Search, SlidersHorizontal, CalendarRange } from 'lucide-react';
 import { FieldLead, getMyFieldLeads } from '@/features/field/api';
 
 function formatDate(value: string) {
@@ -80,7 +80,10 @@ export default function MyLeadsPage() {
         !lowerQuery ||
         lead.businessName.toLowerCase().includes(lowerQuery) ||
         lead.customerName.toLowerCase().includes(lowerQuery) ||
-        lead.mobileNumber.includes(lowerQuery);
+        lead.mobileNumber.includes(lowerQuery) ||
+        lead.mandiData?.commodity.toLowerCase().includes(lowerQuery) ||
+        lead.mandiData?.mandiName.toLowerCase().includes(lowerQuery) ||
+        lead.mandiData?.regionSourceArea.toLowerCase().includes(lowerQuery);
 
       if (!matchesQuery) return false;
 
@@ -118,42 +121,94 @@ export default function MyLeadsPage() {
 
   const compactLeads = filteredLeads;
 
-  const renderCompactLeadCard = (lead: FieldLead) => (
-    <Link
-      key={lead.id}
-      href={`/field/my-leads/${lead.id}`}
-      className="field-card-hover block rounded-[1.45rem] border border-[#eadfcf] bg-white/90 p-4 shadow-[0_22px_50px_-34px_rgba(99,68,26,0.16)]"
-    >
+  const renderLeadCardBody = (lead: FieldLead) => {
+    const isMandiData = lead.leadSource === 'MANDI_DATA';
+
+    return (
       <div className="grid grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-3">
         <div className="min-w-0 border-r border-[#f2e7d8] pr-3">
-          <h3 className="truncate text-[1.05rem] font-semibold tracking-[-0.04em] text-slate-950">
-            {lead.businessName}
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-[1.05rem] font-semibold tracking-[-0.04em] text-slate-950">
+              {isMandiData ? lead.mandiData?.commodity : lead.businessName}
+            </h3>
+            {isMandiData ? (
+              <span className="shrink-0 rounded-full bg-[#fff1df] px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#b45309]">
+                Mandi Data
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 truncate text-base text-slate-500">
-            {lead.customerName}
+            {isMandiData
+              ? lead.mandiData?.mandiName || lead.businessName
+              : lead.customerName}
           </p>
+          {isMandiData ? (
+            <p className="mt-2 text-[0.78rem] text-slate-400">
+              {lead.mandiData?.regionSourceArea}
+            </p>
+          ) : null}
         </div>
 
         <div className="min-w-0 pl-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[0.78rem] font-medium text-slate-400">Phone</p>
-              <p className="mt-0.5 whitespace-nowrap text-[1rem] font-semibold leading-snug tracking-[-0.02em] text-slate-900">
-                {lead.mobileNumber}
+              <p className="text-[0.78rem] font-medium text-slate-400">
+                {isMandiData ? 'Transporter' : 'Phone'}
+              </p>
+              <p className="mt-0.5 truncate text-[1rem] font-semibold leading-snug tracking-[-0.02em] text-slate-900">
+                {isMandiData ? lead.mandiData?.transporterName : lead.mobileNumber}
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-[#eaf1fb] px-3 py-1 text-[0.72rem] font-semibold text-[#355b8c]">
-              {lead.currentStatus === 'new_lead' ? 'New' : lead.currentStatus.replaceAll('_', ' ')}
+              {isMandiData
+                ? `${lead.mandiData?.trucksPerDay} trucks`
+                : lead.currentStatus === 'new_lead'
+                  ? 'New'
+                  : lead.currentStatus.replaceAll('_', ' ')}
             </span>
           </div>
 
-          <div className="mt-3 text-[0.8rem] text-slate-400">
-            <span className="truncate">{formatDate(lead.createdAt)}</span>
-          </div>
+          {isMandiData ? (
+            <div className="mt-3 flex items-center justify-between gap-2 text-[0.8rem]">
+              <span className="truncate text-slate-400">
+                {formatDate(lead.createdAt)}
+              </span>
+              <span className="font-bold text-[#166534]">
+                Rs {Number(lead.mandiData?.todayPrice || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-3 text-[0.8rem] text-slate-400">
+              <span className="truncate">{formatDate(lead.createdAt)}</span>
+            </div>
+          )}
         </div>
       </div>
-    </Link>
-  );
+    );
+  };
+
+  const renderCompactLeadCard = (lead: FieldLead) => {
+    const className =
+      'field-card-hover block rounded-[1.45rem] border border-[#eadfcf] bg-white/90 p-4 shadow-[0_22px_50px_-34px_rgba(99,68,26,0.16)]';
+
+    if (lead.leadSource === 'MANDI_DATA') {
+      return (
+        <div key={lead.id} className={className}>
+          {renderLeadCardBody(lead)}
+        </div>
+      );
+    }
+
+    return (
+      <Link
+        key={lead.id}
+        href={`/field/my-leads/${lead.id}`}
+      className="field-card-hover block rounded-[1.45rem] border border-[#eadfcf] bg-white/90 p-4 shadow-[0_22px_50px_-34px_rgba(99,68,26,0.16)]"
+    >
+        {renderLeadCardBody(lead)}
+      </Link>
+    );
+  };
 
   return (
     <div className="mx-auto w-full max-w-3xl min-w-0 space-y-4 sm:space-y-5">
