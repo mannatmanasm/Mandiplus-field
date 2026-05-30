@@ -83,7 +83,10 @@ export default function MyLeadsPage() {
         lead.mobileNumber.includes(lowerQuery) ||
         lead.mandiData?.commodity.toLowerCase().includes(lowerQuery) ||
         lead.mandiData?.mandiName.toLowerCase().includes(lowerQuery) ||
-        lead.mandiData?.regionSourceArea.toLowerCase().includes(lowerQuery);
+        lead.mandiData?.regionSourceArea.toLowerCase().includes(lowerQuery) ||
+        lead.fssaiData?.businessName.toLowerCase().includes(lowerQuery) ||
+        lead.fssaiData?.companyPhone.includes(lowerQuery) ||
+        lead.fssaiData?.companyEmail.toLowerCase().includes(lowerQuery);
 
       if (!matchesQuery) return false;
 
@@ -123,6 +126,7 @@ export default function MyLeadsPage() {
 
   const renderLeadCardBody = (lead: FieldLead) => {
     const isMandiData = lead.leadSource === 'MANDI_DATA';
+    const isFssaiLead = lead.leadSource === 'FSSAI_LEAD';
 
     return (
       <div className="grid grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] gap-3">
@@ -136,15 +140,24 @@ export default function MyLeadsPage() {
                 Mandi Data
               </span>
             ) : null}
+            {isFssaiLead ? (
+              <span className="shrink-0 rounded-full bg-[#eef2ff] px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-[#4338ca]">
+                FSSAI Lead
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 truncate text-base text-slate-500">
             {isMandiData
               ? lead.mandiData?.mandiName || lead.businessName
-              : lead.customerName}
+              : isFssaiLead
+                ? lead.fssaiData?.companyEmail || lead.customerName
+                : lead.customerName}
           </p>
-          {isMandiData ? (
+          {isMandiData || isFssaiLead ? (
             <p className="mt-2 text-[0.78rem] text-slate-400">
-              {lead.mandiData?.regionSourceArea}
+              {isMandiData
+                ? lead.mandiData?.regionSourceArea
+                : lead.fssaiData?.kindOfBusiness}
             </p>
           ) : null}
         </div>
@@ -162,6 +175,8 @@ export default function MyLeadsPage() {
             <span className="shrink-0 rounded-full bg-[#eaf1fb] px-3 py-1 text-[0.72rem] font-semibold text-[#355b8c]">
               {isMandiData
                 ? `${lead.mandiData?.trucksPerDay} trucks`
+                : isFssaiLead
+                  ? 'FSSAI'
                 : lead.currentStatus === 'new_lead'
                   ? 'New'
                   : lead.currentStatus.replaceAll('_', ' ')}
@@ -177,6 +192,10 @@ export default function MyLeadsPage() {
                 Rs {Number(lead.mandiData?.todayPrice || 0).toLocaleString('en-IN')}
               </span>
             </div>
+          ) : isFssaiLead ? (
+            <div className="mt-3 text-[0.8rem] text-slate-400">
+              <span className="truncate">{formatDate(lead.createdAt)}</span>
+            </div>
           ) : (
             <div className="mt-3 text-[0.8rem] text-slate-400">
               <span className="truncate">{formatDate(lead.createdAt)}</span>
@@ -191,7 +210,7 @@ export default function MyLeadsPage() {
     const className =
       'field-card-hover block rounded-[1.45rem] border border-[#eadfcf] bg-white/90 p-4 shadow-[0_22px_50px_-34px_rgba(99,68,26,0.16)]';
 
-    if (lead.leadSource === 'MANDI_DATA') {
+    if (lead.leadSource === 'MANDI_DATA' || lead.leadSource === 'FSSAI_LEAD') {
       return (
         <div key={lead.id} className={className}>
           {renderLeadCardBody(lead)}

@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
-  CalendarDays,
   CirclePlus,
   ClipboardList,
+  FileBadge2,
   House,
   LayoutGrid,
   LogOut,
@@ -17,9 +17,14 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthContext';
-import { createPriorityLead, type PriorityLeadPayload } from '@/features/field/api';
+import {
+  createFssaiLead,
+  createPriorityLead,
+  type PriorityLeadPayload,
+} from '@/features/field/api';
 import {
   isOfflineCapableError,
+  queueFssaiLead,
   queuePriorityLead,
 } from '@/features/pwa/offlineQueue';
 
@@ -27,7 +32,6 @@ const navigation = [
   { name: 'Overview', href: '/field', icon: House },
   { name: 'Add Lead', href: '/field/add-lead', icon: CirclePlus },
   { name: 'Leads', href: '/field/my-leads', icon: ClipboardList },
-  { name: 'Meetings', href: '/field/meetings', icon: CalendarDays },
 ];
 
 const profileNavigation = {
@@ -64,6 +68,14 @@ const priorityLeadInitialForm = {
   todayPrice: '',
 };
 
+const fssaiLeadInitialForm = {
+  businessName: '',
+  businessAddress: '',
+  kindOfBusiness: 'Food Vending Agencies',
+  companyPhone: '9606995351',
+  companyEmail: 'manat@mandiplus.com',
+};
+
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
 }
@@ -82,6 +94,17 @@ export default function ProtectedShell({
   const [priorityError, setPriorityError] = useState('');
   const [prioritySuccess, setPrioritySuccess] = useState('');
   const [priorityForm, setPriorityForm] = useState(priorityLeadInitialForm);
+  const [fssaiOpen, setFssaiOpen] = useState(false);
+  const [fssaiSubmitting, setFssaiSubmitting] = useState(false);
+  const [fssaiError, setFssaiError] = useState('');
+  const [fssaiSuccess, setFssaiSuccess] = useState('');
+  const [fssaiForm, setFssaiForm] = useState(fssaiLeadInitialForm);
+  const [fssaiPhotos, setFssaiPhotos] = useState({
+    aadharFrontPhoto: null as File | null,
+    aadharBackPhoto: null as File | null,
+    panCardPhoto: null as File | null,
+    clientPhoto: null as File | null,
+  });
   const firstName = user?.name?.split(' ')[0] || 'there';
   const initials =
     user?.name
@@ -140,6 +163,18 @@ export default function ProtectedShell({
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fieldPriorityLeadDraft');
     }
+  };
+
+  const resetFssaiForm = () => {
+    setFssaiForm(fssaiLeadInitialForm);
+    setFssaiPhotos({
+      aadharFrontPhoto: null,
+      aadharBackPhoto: null,
+      panCardPhoto: null,
+      clientPhoto: null,
+    });
+    setFssaiError('');
+    setFssaiSuccess('');
   };
 
   const handlePrioritySubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -201,6 +236,48 @@ export default function ProtectedShell({
     }
   };
 
+  const handleFssaiSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFssaiError('');
+    setFssaiSuccess('');
+
+    const payload = new FormData();
+    Object.entries(fssaiForm).forEach(([key, value]) => payload.append(key, value));
+    Object.entries(fssaiPhotos).forEach(([key, file]) => {
+      if (file) payload.append(key, file);
+    });
+
+    try {
+      setFssaiSubmitting(true);
+      await createFssaiLead(payload);
+      resetFssaiForm();
+      setFssaiSuccess('FSSAI data submitted.');
+      window.setTimeout(() => {
+        setFssaiOpen(false);
+        setFssaiSuccess('');
+      }, 700);
+    } catch (error: unknown) {
+      if (isOfflineCapableError(error)) {
+        await queueFssaiLead(fssaiForm, fssaiPhotos);
+        resetFssaiForm();
+        setFssaiSuccess('FSSAI data saved.');
+        window.setTimeout(() => {
+          setFssaiOpen(false);
+          setFssaiSuccess('');
+        }, 900);
+        return;
+      }
+
+      setFssaiError(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message || 'Failed to submit FSSAI data'
+          : 'Failed to submit FSSAI data',
+      );
+    } finally {
+      setFssaiSubmitting(false);
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f7f3ea] text-sm text-slate-600">
@@ -250,6 +327,33 @@ export default function ProtectedShell({
               );
             })}
           </nav>
+
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPriorityOpen(true);
+                setPriorityError('');
+                setPrioritySuccess('');
+              }}
+              className="field-card-hover flex items-center gap-3 rounded-2xl border border-[#eadfcf] bg-white/80 px-4 py-3 text-sm font-medium text-slate-700"
+            >
+              <LayoutGrid className="h-5 w-5 text-[#b45309]" />
+              Mandi Data
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFssaiOpen(true);
+                setFssaiError('');
+                setFssaiSuccess('');
+              }}
+              className="field-card-hover flex items-center gap-3 rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white"
+            >
+              <FileBadge2 className="h-5 w-5" />
+              FSSAI Data
+            </button>
+          </div>
 
           <button
             type="button"
@@ -343,18 +447,33 @@ export default function ProtectedShell({
           <button
             type="button"
             onClick={() => {
-              setPriorityOpen(true);
-              setPriorityError('');
-              setPrioritySuccess('');
+              setFssaiOpen(true);
+              setFssaiError('');
+              setFssaiSuccess('');
             }}
             className="group relative -mt-5 flex min-h-[4.9rem] flex-col items-center justify-center rounded-[1.55rem] border border-[#ead7b8] bg-[linear-gradient(145deg,#fffdf8_0%,#fff3d8_58%,#f6c56f_100%)] px-2 text-center text-[9.5px] font-extrabold leading-tight text-[#5f3510] shadow-[0_18px_36px_-22px_rgba(120,72,18,0.55),0_0_0_5px_rgba(255,252,246,0.86)] transition duration-200 hover:-translate-y-0.5 active:scale-95"
-            aria-label="Add mandi data"
+            aria-label="Add FSSAI data"
           >
             <span className="absolute inset-1 rounded-[1.25rem] bg-[linear-gradient(145deg,rgba(255,255,255,0.82),transparent_62%)]" />
             <span className="relative mb-1 grid h-7 w-7 place-items-center rounded-full bg-[#111827] text-lg text-white shadow-[0_10px_18px_-12px_rgba(17,24,39,0.75)]">
               +
             </span>
-            <span className="relative max-w-[4.2rem]">Mandi Data</span>
+            <span className="relative max-w-[4.2rem]">FSSAI Data</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPriorityOpen(true);
+              setPriorityError('');
+              setPrioritySuccess('');
+            }}
+            className="flex min-w-0 flex-col items-center justify-center rounded-[1.15rem] px-1 py-1.5 text-[10px] font-medium leading-tight text-slate-600 transition"
+            aria-label="Add mandi data"
+          >
+            <span className="flex scale-[0.86] flex-col items-center justify-center">
+              <LayoutGrid className="mb-1 h-[1.05rem] w-[1.05rem] shrink-0" />
+              <span className="truncate text-center">Mandi</span>
+            </span>
           </button>
           {navigation.slice(2).map((item) => {
             const active = pathname === item.href;
@@ -380,7 +499,7 @@ export default function ProtectedShell({
       </nav>
 
       {priorityOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 px-3 pb-3 backdrop-blur-sm lg:hidden">
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 px-3 pb-3 backdrop-blur-sm">
           <div className="field-glass max-h-[92vh] w-full overflow-hidden rounded-[2rem] shadow-[0_26px_80px_-28px_rgba(15,23,42,0.65)]">
             <div className="flex items-center justify-between border-b border-[#eadfcf] px-5 py-4">
               <div>
@@ -493,6 +612,137 @@ export default function ProtectedShell({
                 >
                   <Send className="h-4 w-4" />
                   {prioritySubmitting ? 'Submitting...' : 'Submit Mandi Data'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {fssaiOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45 px-3 pb-3 backdrop-blur-sm">
+          <div className="field-glass max-h-[92vh] w-full overflow-hidden rounded-[2rem] shadow-[0_26px_80px_-28px_rgba(15,23,42,0.65)] lg:mx-auto lg:max-w-2xl">
+            <div className="flex items-center justify-between border-b border-[#eadfcf] px-5 py-4">
+              <div>
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-[#b45309]">
+                  Quick action
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+                  FSSAI Data
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFssaiOpen(false)}
+                className="grid h-11 w-11 place-items-center rounded-full border border-[#eadfcf] bg-white/80 text-slate-700 transition active:scale-95"
+                aria-label="Close FSSAI data form"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleFssaiSubmit}
+              className="max-h-[calc(92vh-5rem)] overflow-y-auto px-5 pb-28 pt-4"
+            >
+              <div className="grid gap-4">
+                {[
+                  ['businessName', 'Business Name', 'text'],
+                  ['businessAddress', 'Business Address', 'textarea'],
+                  ['kindOfBusiness', 'Kind of Business', 'text'],
+                  ['companyPhone', 'Company Phone', 'tel'],
+                  ['companyEmail', 'Company Email', 'email'],
+                ].map(([key, label, type]) => (
+                  <label key={key} className="space-y-2">
+                    <span className="text-sm font-semibold text-slate-700">
+                      {label}
+                    </span>
+                    {type === 'textarea' ? (
+                      <textarea
+                        required
+                        rows={3}
+                        value={fssaiForm[key as keyof typeof fssaiForm]}
+                        onChange={(event) =>
+                          setFssaiForm((prev) => ({
+                            ...prev,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-[1.25rem] border border-[#e7dcc7] bg-white/84 px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                      />
+                    ) : (
+                      <input
+                        required
+                        type={type}
+                        value={fssaiForm[key as keyof typeof fssaiForm]}
+                        onChange={(event) =>
+                          setFssaiForm((prev) => ({
+                            ...prev,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-[1.25rem] border border-[#e7dcc7] bg-white/84 px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                      />
+                    )}
+                  </label>
+                ))}
+
+                {[
+                  ['aadharFrontPhoto', 'Aadhar Card Front'],
+                  ['aadharBackPhoto', 'Aadhar Card Back'],
+                  ['panCardPhoto', 'PAN Card Photo'],
+                  ['clientPhoto', 'Client Photo'],
+                ].map(([key, label]) => (
+                  <label key={key} className="space-y-2">
+                    <span className="text-sm font-semibold text-slate-700">
+                      {label}
+                    </span>
+                    <div className="rounded-[1.25rem] border border-dashed border-[#e7dcc7] bg-white/72 px-4 py-3">
+                      <p className="truncate text-sm text-slate-500">
+                        {fssaiPhotos[key as keyof typeof fssaiPhotos]?.name ||
+                          'Choose photo'}
+                      </p>
+                      <input
+                        required
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) =>
+                          setFssaiPhotos((prev) => ({
+                            ...prev,
+                            [key]: event.target.files?.[0] || null,
+                          }))
+                        }
+                        className="mt-3 block w-full text-sm text-slate-500"
+                      />
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {fssaiError ? (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {fssaiError}
+                </div>
+              ) : null}
+              {fssaiSuccess ? (
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  {fssaiSuccess}
+                </div>
+              ) : null}
+
+              <div
+                className="fixed inset-x-3 bottom-3 z-10 rounded-[1.55rem] border border-[#eadfcf] bg-[#fffdf8]/95 p-2 backdrop-blur lg:left-1/2 lg:max-w-2xl lg:-translate-x-1/2"
+                style={{
+                  paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                }}
+              >
+                <button
+                  type="submit"
+                  disabled={fssaiSubmitting}
+                  className="flex w-full items-center justify-center gap-2 rounded-[1.25rem] bg-[linear-gradient(135deg,#111827_0%,#5b21b6_100%)] px-5 py-4 text-sm font-extrabold text-white shadow-[0_18px_36px_-18px_rgba(17,24,39,0.65)] transition active:scale-[0.98] disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" />
+                  {fssaiSubmitting ? 'Submitting...' : 'Submit FSSAI Data'}
                 </button>
               </div>
             </form>

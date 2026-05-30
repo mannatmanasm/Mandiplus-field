@@ -3,6 +3,7 @@
 import axios from 'axios';
 import {
   createFieldLead,
+  createFssaiLead,
   createPriorityLead,
   submitMeetingFeedback,
   type MeetingFeedbackPayload,
@@ -52,10 +53,35 @@ type QueuedPriorityLeadRequest = {
   payload: PriorityLeadPayload;
 };
 
+type QueuedFssaiLeadRequest = {
+  id: string;
+  type: 'fssai_lead';
+  createdAt: string;
+  payload: {
+    form: {
+      businessName: string;
+      businessAddress: string;
+      kindOfBusiness: string;
+      companyPhone: string;
+      companyEmail: string;
+    };
+    photos: Record<
+      'aadharFrontPhoto' | 'aadharBackPhoto' | 'panCardPhoto' | 'clientPhoto',
+      | {
+          blob: Blob;
+          name: string;
+          type: string;
+        }
+      | undefined
+    >;
+  };
+};
+
 type QueuedRequest =
   | QueuedLeadRequest
   | QueuedFeedbackRequest
-  | QueuedPriorityLeadRequest;
+  | QueuedPriorityLeadRequest
+  | QueuedFssaiLeadRequest;
 
 function emitQueueChange() {
   if (typeof window === 'undefined') return;
@@ -209,6 +235,42 @@ export async function queuePriorityLead(payload: PriorityLeadPayload) {
   emitOfflineSaved();
 }
 
+export async function queueFssaiLead(
+  form: QueuedFssaiLeadRequest['payload']['form'],
+  photos: Record<
+    'aadharFrontPhoto' | 'aadharBackPhoto' | 'panCardPhoto' | 'clientPhoto',
+    File | null
+  >,
+) {
+  const request: QueuedFssaiLeadRequest = {
+    id: makeId('fssai'),
+    type: 'fssai_lead',
+    createdAt: new Date().toISOString(),
+    payload: {
+      form,
+      photos: Object.fromEntries(
+        Object.entries(photos).map(([key, file]) => [
+          key,
+          file
+            ? {
+                blob: file,
+                name: file.name,
+                type: file.type,
+              }
+            : undefined,
+        ]),
+      ) as QueuedFssaiLeadRequest['payload']['photos'],
+    },
+  };
+
+  await withStore('readwrite', async (store) => {
+    await requestToPromise(store.put(request));
+  });
+
+  emitQueueChange();
+  emitOfflineSaved();
+}
+
 export async function getQueuedRequestCount() {
   return withStore('readonly', async (store) => requestToPromise<number>(store.count()));
 }
@@ -245,6 +307,21 @@ function rebuildLeadFormData(payload: QueuedLeadRequest['payload']) {
   return formData;
 }
 
+function rebuildFssaiFormData(payload: QueuedFssaiLeadRequest['payload']) {
+  const formData = new FormData();
+  Object.entries(payload.form).forEach(([key, value]) => formData.append(key, value));
+  Object.entries(payload.photos).forEach(([key, photo]) => {
+    if (!photo) return;
+    formData.append(
+      key,
+      new File([photo.blob], photo.name, {
+        type: photo.type,
+      }),
+    );
+  });
+  return formData;
+}
+
 export function isOfflineCapableError(error: unknown) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
   return axios.isAxiosError(error) && (
@@ -270,8 +347,10 @@ export async function syncOfflineQueue() {
           request.payload.appointmentId,
           request.payload.feedback,
         );
-      } else {
+      } else if (request.type === 'priority_lead') {
         await createPriorityLead(request.payload);
+      } else {
+        await createFssaiLead(rebuildFssaiFormData(request.payload));
       }
 
       await removeQueuedRequest(request.id);

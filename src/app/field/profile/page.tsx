@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
-import { BadgeCheck, UserRound } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, CalendarDays, UserRound } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthContext';
 import { FieldProfile, getFieldProfile } from '@/features/field/api';
 
@@ -86,6 +87,24 @@ export default function ProfilePage() {
               {profile.accessPending ? 'Pending admin assignment' : 'Active'}
             </p>
           </div>
+        </div>
+
+        <div className="mx-6 mt-6">
+          <Link
+            href="/field/meetings"
+            className="field-card-hover flex items-center justify-between rounded-2xl border border-[#e7dcc7] bg-white/84 px-4 py-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-[#eaf1ff] p-3 text-[#1d4f91]">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Meetings</p>
+                <p className="mt-1 text-xs text-slate-500">Visits and feedback</p>
+              </div>
+            </div>
+            <ArrowUpRight className="h-4 w-4 text-slate-400" />
+          </Link>
         </div>
 
         <div className="mt-6 px-6 pb-6">

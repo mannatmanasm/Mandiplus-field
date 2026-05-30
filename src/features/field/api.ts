@@ -48,7 +48,7 @@ export interface FieldLead {
   currentStatus: LeadStatus;
   latestFeedbackSummary?: string | null;
   createdAt: string;
-  leadSource?: 'FIELD_LEAD' | 'MANDI_DATA';
+  leadSource?: 'FIELD_LEAD' | 'MANDI_DATA' | 'FSSAI_LEAD';
   mandiData?: {
     commodity: string;
     mandiName: string;
@@ -57,6 +57,17 @@ export interface FieldLead {
     trucksPerDay: number;
     regionSourceArea: string;
     todayPrice: number | string;
+  };
+  fssaiData?: {
+    businessName: string;
+    businessAddress: string;
+    kindOfBusiness: string;
+    companyPhone: string;
+    companyEmail: string;
+    aadharFrontPhotoUrl?: string | null;
+    aadharBackPhotoUrl?: string | null;
+    panCardPhotoUrl?: string | null;
+    clientPhotoUrl?: string | null;
   };
 }
 
@@ -74,6 +85,14 @@ export interface FieldPriorityLead extends PriorityLeadPayload {
   id: string;
   createdAt: string;
 }
+
+export type FssaiLeadPayload = {
+  businessName: string;
+  businessAddress: string;
+  kindOfBusiness: string;
+  companyPhone: string;
+  companyEmail: string;
+};
 
 export interface FieldAppointment {
   id: string;
@@ -206,6 +225,20 @@ export async function createPriorityLead(
       headers: {
         ...authHeaders(),
         'Content-Type': 'application/json',
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function createFssaiLead(payload: FormData): Promise<FieldLead> {
+  const response = await axios.post(
+    `${API_BASE_URL}/field-operations/fssai-leads`,
+    payload,
+    {
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'multipart/form-data',
       },
     },
   );
