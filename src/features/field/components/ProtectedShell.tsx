@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
+  Camera,
   CirclePlus,
   ClipboardList,
   FileBadge2,
@@ -13,6 +14,7 @@ import {
   LogOut,
   Search,
   Send,
+  Upload,
   X,
   UserRound,
 } from 'lucide-react';
@@ -75,6 +77,13 @@ const fssaiLeadInitialForm = {
   companyPhone: '9606995351',
   companyEmail: 'manat@mandiplus.com',
 };
+
+const fssaiPhotoFields = [
+  ['aadharFrontPhoto', 'Aadhar Card Front', 'environment'],
+  ['aadharBackPhoto', 'Aadhar Card Back', 'environment'],
+  ['panCardPhoto', 'PAN Card Photo', 'environment'],
+  ['clientPhoto', 'Client Photo', 'user'],
+] as const;
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -240,6 +249,12 @@ export default function ProtectedShell({
     event.preventDefault();
     setFssaiError('');
     setFssaiSuccess('');
+
+    const missingPhoto = fssaiPhotoFields.find(([key]) => !fssaiPhotos[key]);
+    if (missingPhoto) {
+      setFssaiError(`${missingPhoto[1]} is required.`);
+      return;
+    }
 
     const payload = new FormData();
     Object.entries(fssaiForm).forEach(([key, value]) => payload.append(key, value));
@@ -674,6 +689,11 @@ export default function ProtectedShell({
                       <input
                         required
                         type={type}
+                        readOnly={
+                          key === 'kindOfBusiness' ||
+                          key === 'companyPhone' ||
+                          key === 'companyEmail'
+                        }
                         value={fssaiForm[key as keyof typeof fssaiForm]}
                         onChange={(event) =>
                           setFssaiForm((prev) => ({
@@ -681,19 +701,20 @@ export default function ProtectedShell({
                             [key]: event.target.value,
                           }))
                         }
-                        className="w-full rounded-[1.25rem] border border-[#e7dcc7] bg-white/84 px-4 py-3 text-sm outline-none transition focus:border-[#ea580c]"
+                        className={`w-full rounded-[1.25rem] border border-[#e7dcc7] px-4 py-3 text-sm outline-none transition focus:border-[#ea580c] ${
+                          key === 'kindOfBusiness' ||
+                          key === 'companyPhone' ||
+                          key === 'companyEmail'
+                            ? 'bg-slate-100 text-slate-500'
+                            : 'bg-white/84'
+                        }`}
                       />
                     )}
                   </label>
                 ))}
 
-                {[
-                  ['aadharFrontPhoto', 'Aadhar Card Front'],
-                  ['aadharBackPhoto', 'Aadhar Card Back'],
-                  ['panCardPhoto', 'PAN Card Photo'],
-                  ['clientPhoto', 'Client Photo'],
-                ].map(([key, label]) => (
-                  <label key={key} className="space-y-2">
+                {fssaiPhotoFields.map(([key, label, captureMode]) => (
+                  <div key={key} className="space-y-2">
                     <span className="text-sm font-semibold text-slate-700">
                       {label}
                     </span>
@@ -702,20 +723,41 @@ export default function ProtectedShell({
                         {fssaiPhotos[key as keyof typeof fssaiPhotos]?.name ||
                           'Choose photo'}
                       </p>
-                      <input
-                        required
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) =>
-                          setFssaiPhotos((prev) => ({
-                            ...prev,
-                            [key]: event.target.files?.[0] || null,
-                          }))
-                        }
-                        className="mt-3 block w-full text-sm text-slate-500"
-                      />
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#e7dcc7] bg-white px-3 py-3 text-xs font-bold uppercase tracking-[0.08em] text-slate-700 transition active:scale-[0.98]">
+                          <Upload className="h-4 w-4 text-[#b45309]" />
+                          Upload
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) =>
+                              setFssaiPhotos((prev) => ({
+                                ...prev,
+                                [key]: event.target.files?.[0] || null,
+                              }))
+                            }
+                            className="sr-only"
+                          />
+                        </label>
+                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#111827] px-3 py-3 text-xs font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98]">
+                          <Camera className="h-4 w-4" />
+                          Camera
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture={captureMode}
+                            onChange={(event) =>
+                              setFssaiPhotos((prev) => ({
+                                ...prev,
+                                [key]: event.target.files?.[0] || null,
+                              }))
+                            }
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
                     </div>
-                  </label>
+                  </div>
                 ))}
               </div>
 
